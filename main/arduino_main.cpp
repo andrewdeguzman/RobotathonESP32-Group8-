@@ -21,20 +21,31 @@ limitations under the License.
 
 #include <Arduino.h>
 #include <Bluepad32.h>
-
+#include <Wire.h>
+#include <Arduino_APDS9960.h>
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
 
+#define MOTOR1_PIN1 27
+#define MOTOR1_PIN2 26
+#define ENABLE1_PIN 14
+#define MOTOR2_PIN1 25
+#define MOTOR2_PIN2 33
+#define ENABLE2_PIN 32
+#define APDS9960_INT 0
+#define I2C_SDA     21
+#define I2C_SCL     22
+#define I2C_FREQ    100000
+
 Servo myservo;
 int pos = 0;
 
-int motor1Pin1 = 27;
-int motor1Pin2 = 26;
-int enable1Pin = 14;
-int motor2Pin1 = 25;
-int motor2Pin2 = 33;
-int enable2Pin = 32;
+QTRSensors qtr;
+uint16_t sensors[2];
+
+TwoWire I2C_0 = TwoWire(0);
+APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
 const int freq = 30000;
 const int pwmChannel = 0;
@@ -42,6 +53,8 @@ const int resolution = 8;
 int dutyCycle = 170;
 
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
+
+ESP32SharpIR sharpIR(ESP32SharpIR::GP2Y0A41SK0F, 34);
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -78,20 +91,154 @@ void setup() {
 	ESP32PWM::allocateTimer(3);
 
     // TODO: Write your setup code here
-    //Serial.begin(115200);
-	//myservo.attach(13);
+	myservo.attach(13);
+    qtr.setTypeAnalog(); // or setTypeAnalog()
+    qtr.setSensorPins((const uint8_t[]) {32, 33}, 2); // pin numbers go in the curly brackets {}, and number of pins goes after
 
-    pinMode(motor1Pin1, OUTPUT);
-    pinMode(motor1Pin2, OUTPUT);
-    pinMode(enable1Pin, OUTPUT);
-    pinMode(motor2Pin1, OUTPUT);
-    pinMode(motor2Pin2, OUTPUT);
-    pinMode(enable2Pin, OUTPUT);
+    //sets up I2C protocol
+    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
 
-    ledcSetup(pwmChannel, freq, resolution);
-    ledcAttachPin(enable1Pin, pwmChannel);
-    ledcAttachPin(enable2Pin, pwmChannel);
-    ledcWrite(pwmChannel, dutyCycle);
+    //sets up color sensor
+    sensor.setInterruptPin(APDS9960_INT);
+    sensor.begin();
+
+    IRSensorName.setFilterRate(1.0f);
+
+    // calibration sequence
+    for (uint8_t i = 0; i < 250; i++) { 
+        Serial.println("calibrating");
+        qtr.calibrate(); 
+        delay(20);
+    }
+
+    pinMode(MOTOR1_PIN1, OUTPUT);
+    pinMode(MOTOR1_PIN2, OUTPUT);
+    pinMode(ENABLE1_PIN, OUTPUT);
+    pinMode(MOTOR2_PIN1, OUTPUT);
+    pinMode(MOTOR2_PIN2, OUTPUT);
+    pinMode(ENABLE2_PIN, OUTPUT);
+
+    Serial.begin(115200);
+}
+
+void moveNoob(Controller* controller) {
+    if(controller && controller -> isConnected()) {
+        if(controller -> axisRY() > 0) {
+            digitalWrite(MOTOR1_PIN1, LOW);
+            digitalWrite(MOTOR1_PIN2, HIGH);
+            digitalWrite(MOTOR2_PIN1, LOW);
+            digitalWrite(MOTOR2_PIN2, HIGH);
+        }
+        if(controller -> axisRY() == 0) {
+            digitalWrite(MOTOR1_PIN1, LOW);
+            digitalWrite(MOTOR1_PIN2, LOW);
+            digitalWrite(MOTOR2_PIN1, LOW);
+            digitalWrite(MOTOR2_PIN2, LOW);
+        }
+        if(controller -> axisY() > 0) {
+            digitalWrite(MOTOR1_PIN1, LOW);
+            digitalWrite(MOTOR1_PIN2, HIGH);
+            digitalWrite(MOTOR2_PIN1, LOW);
+            digitalWrite(MOTOR2_PIN2, HIGH);
+        }
+        if(controller -> axisY() == 0) {
+            digitalWrite(MOTOR1_PIN1, LOW);
+            digitalWrite(MOTOR1_PIN2, LOW);
+            digitalWrite(MOTOR2_PIN1, LOW);
+            digitalWrite(MOTOR2_PIN2, LOW);
+        }
+    }
+}
+
+void racism() {
+    int r, g, b, a;
+    // Wait until color is read from the sensor 
+    while (!sensor.colorAvailable()) { delay(5); }
+    sensor.readColor(r, g, b, a);
+
+     String racist;
+    if (r > g && r > b) {
+        racist = "Red";
+    } else if (g > r && g > b) {
+        racist = "Green";
+    } else if (b > r && b > g) {
+        racist = "Blue";
+    }
+
+    Serial.print("Color: ");
+    Serial.println(racist);
+
+    //LED
+}
+
+//monkey see monkey follow line
+void monkey() {
+    qtr.readLineBlack(sensors); // Get calibrated sensor values returned in the sensors array
+    int leftSensor = sensors[0];
+    int rightSensor = sensors[1];
+    int threshold = 500; // fix later
+
+    if (leftSensor < threshold && rightSensor < threshold) {
+        // Move forward
+        digitalWrite(MOTOR1_PIN1, LOW);
+        digitalWrite(MOTOR1_PIN2, HIGH);
+        digitalWrite(MOTOR2_PIN1, LOW);
+        digitalWrite(MOTOR2_PIN2, HIGH);
+    } else if (leftSensor < threshold && rightSensor >= threshold) {
+        // Turn right
+        digitalWrite(MOTOR1_PIN1, LOW);
+        digitalWrite(MOTOR1_PIN2, HIGH);
+        digitalWrite(MOTOR2_PIN1, HIGH);
+        digitalWrite(MOTOR2_PIN2, LOW);
+    } else if (leftSensor >= threshold && rightSensor < threshold) {
+        // Turn left
+        digitalWrite(MOTOR1_PIN1, HIGH);
+        digitalWrite(MOTOR1_PIN2, LOW);
+        digitalWrite(MOTOR2_PIN1, LOW);
+        digitalWrite(MOTOR2_PIN2, HIGH);
+    } else {
+        // Stop
+        digitalWrite(MOTOR1_PIN1, LOW);
+        digitalWrite(MOTOR1_PIN2, LOW);
+        digitalWrite(MOTOR2_PIN1, LOW);
+        digitalWrite(MOTOR2_PIN2, LOW);
+    }
+
+    Serial.print(sensors[0]);
+    Serial.print(" ");
+    Serial.println(sensors[1]);
+    
+    delay(250);
+}
+void covid() {
+    float distance = IRSensorName.getDistanceFloat();
+    Serial.print("Distance: ");
+    Serial.println(distance);
+
+    float desiredDistance = 20.0; // self-explanatory
+    float tolerance = 5.0; // cm maybe
+
+    if (distance < desiredDistance - tolerance) {
+        // too close turn right
+        digitalWrite(MOTOR1_PIN1, LOW);
+        digitalWrite(MOTOR1_PIN2, HIGH);
+        digitalWrite(MOTOR2_PIN1, HIGH);
+        digitalWrite(MOTOR2_PIN2, LOW);
+    } else if (distance > desiredDistance + tolerance) {
+        // too far turn right
+        digitalWrite(MOTOR1_PIN1, HIGH);
+        digitalWrite(MOTOR1_PIN2, LOW);
+        digitalWrite(MOTOR2_PIN1, LOW);
+        digitalWrite(MOTOR2_PIN2, HIGH);
+    } else {
+        // go straight
+        digitalWrite(MOTOR1_PIN1, LOW);
+        digitalWrite(MOTOR1_PIN2, HIGH);
+        digitalWrite(MOTOR2_PIN1, LOW);
+        digitalWrite(MOTOR2_PIN2, HIGH);
+    }
+
+    delay(100);
 }
 
 // Arduino loop function. Runs in CPU 1
@@ -101,53 +248,14 @@ void loop() {
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         GamepadPtr myGamepad = myGamepads[i];
         if (myGamepad && myGamepad->isConnected()) {
-            // TODO: Write your controller code here
-
+            //use if-else with buttons to make the calls
+            //eg. press button to trigger line follow function then hit another button to break out
+            //joystick controll
+            moveNoob(myGamepad);
         }
     }
 
-    // TODO: Write your periodic code here
-    // Move the DC motor forward at maximum speed
-    digitalWrite(motor1Pin1, LOW);
-    digitalWrite(motor1Pin2, HIGH);
-    digitalWrite(motor2Pin1, LOW);
-    digitalWrite(motor2Pin2, HIGH);
-    delay(2000);
-
-    // Stop the DC motor
-    digitalWrite(motor1Pin1, LOW);
-    digitalWrite(motor1Pin2, LOW);
-    digitalWrite(motor2Pin1, LOW);
-    digitalWrite(motor2Pin2, LOW);
-    delay(1000);
-
-    // Move DC motor backwards at maximum speed
-    digitalWrite(motor1Pin1, HIGH);
-    digitalWrite(motor1Pin2, LOW);
-    digitalWrite(motor2Pin1, HIGH);
-    digitalWrite(motor2Pin2, LOW); 
-    delay(2000);
-
-    // Stop the DC motor
-    digitalWrite(motor1Pin1, LOW);
-    digitalWrite(motor1Pin2, LOW);
-    digitalWrite(motor2Pin1, LOW);
-    digitalWrite(motor2Pin2, LOW);
-    delay(1000);
-
-    // Move DC motor forward with increasing speed
-    digitalWrite(motor1Pin1, HIGH);
-    digitalWrite(motor1Pin2, LOW);
-    digitalWrite(motor2Pin1, HIGH);
-    digitalWrite(motor2Pin2, LOW);
-    while (dutyCycle <= 255){
-        ledcWrite(enable1Pin, dutyCycle);
-        ledcWrite(enable2Pin, dutyCycle);   
-        dutyCycle = dutyCycle + 5;
-        delay(500);
-    }
-    dutyCycle = 170;
-    ledcWrite(pwmChannel, dutyCycle);
+    delay(250);
 
     vTaskDelay(1);
 }
