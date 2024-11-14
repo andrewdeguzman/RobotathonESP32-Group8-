@@ -26,6 +26,7 @@ limitations under the License.
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
+#include <ESP32SharpIR.h>
 
 #define MOTOR1_PIN1 27
 #define MOTOR1_PIN2 26
@@ -34,9 +35,13 @@ limitations under the License.
 #define MOTOR2_PIN2 33
 #define ENABLE2_PIN 32
 #define APDS9960_INT 0
+#define sharpIRPin  36
 #define I2C_SDA     21
 #define I2C_SCL     22
 #define I2C_FREQ    100000
+
+String skincolor;
+boolean discriminate = false;
 
 Servo myservo;
 int pos = 0;
@@ -102,7 +107,7 @@ void setup() {
     sensor.setInterruptPin(APDS9960_INT);
     sensor.begin();
 
-    IRSensorName.setFilterRate(1.0f);
+    sharpIR.setFilterRate(1.0f);
 
     // calibration sequence
     for (uint8_t i = 0; i < 250; i++) { 
@@ -123,25 +128,32 @@ void setup() {
 
 void moveNoob(Controller* controller) {
     if(controller && controller -> isConnected()) {
-        if(controller -> axisRY() > 0) {
+        if(controller -> axisRX() > 0) {
             digitalWrite(MOTOR1_PIN1, LOW);
             digitalWrite(MOTOR1_PIN2, HIGH);
             digitalWrite(MOTOR2_PIN1, LOW);
             digitalWrite(MOTOR2_PIN2, HIGH);
         }
-        if(controller -> axisRY() == 0) {
-            digitalWrite(MOTOR1_PIN1, LOW);
+        if(controller -> axisRX() < 0) {
+            digitalWrite(MOTOR1_PIN1, HIGH);
             digitalWrite(MOTOR1_PIN2, LOW);
-            digitalWrite(MOTOR2_PIN1, LOW);
+            digitalWrite(MOTOR2_PIN1, HIGH);
+            digitalWrite(MOTOR2_PIN2, LOW);
+        }
+        if(controller -> axisY() < 0) {
+            digitalWrite(MOTOR1_PIN1, LOW);
+            digitalWrite(MOTOR1_PIN2, HIGH);
+            digitalWrite(MOTOR2_PIN1, HIGH);
             digitalWrite(MOTOR2_PIN2, LOW);
         }
         if(controller -> axisY() > 0) {
-            digitalWrite(MOTOR1_PIN1, LOW);
-            digitalWrite(MOTOR1_PIN2, HIGH);
+            digitalWrite(MOTOR1_PIN1, HIGH);
+            digitalWrite(MOTOR1_PIN2, LOW);
             digitalWrite(MOTOR2_PIN1, LOW);
             digitalWrite(MOTOR2_PIN2, HIGH);
         }
-        if(controller -> axisY() == 0) {
+        
+        if(controller -> axisRX() == 0 && controller -> axisY() == 0) {
             digitalWrite(MOTOR1_PIN1, LOW);
             digitalWrite(MOTOR1_PIN2, LOW);
             digitalWrite(MOTOR2_PIN1, LOW);
@@ -150,8 +162,13 @@ void moveNoob(Controller* controller) {
     }
 }
 
-void racism() {
+String racism() {
     int r, g, b, a;
+
+    //break statement
+    if(gp -> y()) {
+        break();
+    }
     // Wait until color is read from the sensor 
     while (!sensor.colorAvailable()) { delay(5); }
     sensor.readColor(r, g, b, a);
@@ -165,14 +182,21 @@ void racism() {
         racist = "Blue";
     }
 
+    if(discriminate == false) {
+        skincolor = racist;
+        discriminate = true;
+    }
+    
     Serial.print("Color: ");
     Serial.println(racist);
-
-    //LED
 }
 
 //monkey see monkey follow line
-void monkey() {
+void monkey(GamepadPtr gp) {
+    if(gp -> y()) {
+        break();
+    }
+
     qtr.readLineBlack(sensors); // Get calibrated sensor values returned in the sensors array
     int leftSensor = sensors[0];
     int rightSensor = sensors[1];
@@ -211,7 +235,12 @@ void monkey() {
     delay(250);
 }
 void covid() {
-    float distance = IRSensorName.getDistanceFloat();
+    //break statement
+    if(gp -> y()) {
+        break();
+    }
+
+    float distance = sharpIR.getDistanceFloat();
     Serial.print("Distance: ");
     Serial.println(distance);
 
@@ -250,8 +279,30 @@ void loop() {
         if (myGamepad && myGamepad->isConnected()) {
             //use if-else with buttons to make the calls
             //eg. press button to trigger line follow function then hit another button to break out
-            //joystick controll
+            //joystick control for movement
             moveNoob(myGamepad);
+            if(myGamepad -> a()) {
+                monkey();
+            }
+            if(myGamepad -> b()) {
+                covid();
+            }
+            if(myGamepad -> x()) {
+                racism();
+                while(discriminate == true){
+                    //drive forward
+                    digitalWrite(MOTOR1_PIN1, HIGH);
+                    digitalWrite(MOTOR1_PIN2, LOW);
+                    digitalWrite(MOTOR2_PIN1, LOW);
+                    digitalWrite(MOTOR2_PIN2, HIGH);
+                    //delay checking for color
+                    delay(1000);
+                    if(skincolor == racism()){
+                        break();
+                    }
+                    
+                }
+            }
         }
     }
 
