@@ -52,6 +52,8 @@ uint16_t sensors[2];
 TwoWire I2C_0 = TwoWire(0);
 APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
+bool rights = false;
+
 const int freq = 30000;
 const int pwmChannel = 0;
 const int resolution = 8;
@@ -162,12 +164,12 @@ void moveNoob(Controller* controller) {
     }
 }
 
-String racism() {
+void racism() {
     int r, g, b, a;
 
     //break statement
     if(gp -> y()) {
-        break();
+        break;
     }
     // Wait until color is read from the sensor 
     while (!sensor.colorAvailable()) { delay(5); }
@@ -194,7 +196,7 @@ String racism() {
 //monkey see monkey follow line
 void monkey(GamepadPtr gp) {
     if(gp -> y()) {
-        break();
+        break;
     }
 
     qtr.readLineBlack(sensors); // Get calibrated sensor values returned in the sensors array
@@ -235,9 +237,9 @@ void monkey(GamepadPtr gp) {
     delay(250);
 }
 void covid() {
-    //break statement
+    break statement
     if(gp -> y()) {
-        break();
+        break;
     }
 
     float distance = sharpIR.getDistanceFloat();
@@ -270,6 +272,16 @@ void covid() {
     delay(100);
 }
 
+void backshots(GamepadPtr gp) {
+    //stop servod
+    if(gp -> l1() == 0) {
+        myservo.write(1380);
+    }
+    else if(gp -> l1() == 1) {
+        myservo.write(1600);
+    }
+}
+
 // Arduino loop function. Runs in CPU 1
 void loop() {
     BP32.update();
@@ -281,14 +293,19 @@ void loop() {
             //eg. press button to trigger line follow function then hit another button to break out
             //joystick control for movement
             moveNoob(myGamepad);
-            if(myGamepad -> a()) {
-                monkey();
-            }
+            backshots(myGamepad);
+            // if(myGamepad -> a()) {
+            //     monkey(myGamepad*);
+            // }
             if(myGamepad -> b()) {
                 covid();
             }
             if(myGamepad -> x()) {
-                racism();
+                if(!rights) {
+                    racism();
+                    rights = true;
+                }
+
                 while(discriminate == true){
                     //drive forward
                     digitalWrite(MOTOR1_PIN1, HIGH);
@@ -297,10 +314,12 @@ void loop() {
                     digitalWrite(MOTOR2_PIN2, HIGH);
                     //delay checking for color
                     delay(1000);
+                    //check for color
                     if(skincolor == racism()){
-                        break();
+                        break;
                     }
-                    
+                    //reset flag to allow read
+                    rights = false;
                 }
             }
         }
